@@ -1,0 +1,167 @@
+
+```{r}
+suppressPackageStartupMessages({  
+  library(showtext)
+  library(quanteda)
+  library(quanteda.textstats)
+  library(quanteda.textmodels)
+  library(quanteda.textplots)
+  library(caret)
+  library(splitstackshape)
+  library(readtext)
+})
+setwd("/Users/oushiei/Desktop/论文终稿/R_based_translation_study")
+source("font and theme.R")
+```
+
+
+```{r}
+read1 <- readtext("data/10_6_seg",docvarsfrom = "filenames") %>%
+  corpus() %>%
+  tokens(what="fasterword")
+
+token_2ngram <- read1 %>% tokens_ngrams(n=2)
+token_3ngram <- read1 %>% tokens_ngrams(n=3)
+```
+# 2-gram と3-gramを抽出する
+```{r}
+#==========
+# 1:2-gram
+#==========
+tou_pattern_2 = c("，_*","。_*")
+mo_pattern_2=c("*_，","*_。")
+all_pattern_2=c("，_*","。_*","*_，","*_。")
+
+tou_pattern_2gram <- tokens_select(token_2ngram, pattern = tou_pattern_2) %>% dfm() %>% dfm_trim(min_termfreq = 20)
+mo_pattern_2gram<- tokens_select(token_2ngram, pattern = mo_pattern_2) %>% dfm() %>% dfm_trim(min_termfreq = 20)
+all_pattern_2gram<- tokens_select(token_2ngram, pattern = all_pattern_2) %>% dfm() %>% dfm_trim(min_termfreq = 20)
+
+#==========
+# 2:   3gram 
+#==========
+tou_pattern_3 = c("，_*_*","。_*_*")
+mo_pattern_3=c("*_*_，","*_*_。")
+all_pattern_3 =c("，_*_*","。_*_*","*_*_，","*_*_。")
+#
+tou_pattern_3gram <- tokens_select(token_3ngram, pattern = tou_pattern_3)%>% dfm()  %>% dfm_trim(min_termfreq = 20)
+mo_pattern_3gram<- tokens_select(token_3ngram, pattern = mo_pattern_3) %>% dfm() %>% dfm_trim(min_termfreq = 20)
+all_pattern_3gram <- tokens_select(token_3ngram, pattern = mo_pattern_3) %>% dfm() %>% dfm_trim(min_termfreq = 20)
+
+#==========
+# 3:    連詞
+#=========='
+rennshi <- tokens_select(v0, c("和","跟","与","同","及","而","况","况且","何况","乃至","则","乃","就","而","于是","至于","说到","此外","像","如","一般","比方", "却","但是","然而","而","偏偏","只是","不过","至于","致","不料","岂知",     "原来","因为","由于","以便","因此","所以","是故","以致",
+                          "或","抑",
+                          "若","如果","若是","假如","假使","倘若","要是","譬如",
+                          "像","好比","如同","似乎","等于","不如","不及","与其","不如",
+                          "虽然","固然","尽管","纵然","即使"), selection = "keep", padding = F) %>% dfm()
+```
+
+
+```{r}
+#==========
+# この変数は後のコードで使用されます。変わることはありません。
+#==========
+v00 <-tou_pattern_2gram
+v00 <-mo_pattern_2gram
+v00 <-all_pattern_2gram 
+v00 <-tou_pattern_3gram
+v00 <-mo_pattern_3gram
+v00 <-all_pattern_3gram
+v00 <-rennshi
+```
+
+
+```{r}
+quanteda::docvars(v00)
+# ドキュメントのクラスを設定
+docvars(v00, field = "class") <- rep(c("吴树文", "曹曼", "杨爽", "林少华", "谭晶华徐建雄", "郑民钦"), each = 10) %>%
+  as.factor()
+
+# ドキュメントの番号を設定
+docvars(v00, field = "id_numeric") <- 1:ndoc(v00)
+docvars(v00)
+
+# ドキュメントのクラスをデータフレームに変換
+d1 <- quanteda::docvars(v00, field = "class") %>% as.data.frame()
+d1
+colnames(d1) <- "class"
+
+# ドキュメントの番号をデータフレームに変換
+d2 <- quanteda::docvars(v00, field = "id_numeric") %>% as.data.frame()
+colnames(d2) <- "id_numeric"
+
+# クラスと番号のデータフレームを結合
+d3 <- cbind(d1, d2)
+
+# クラスの分布を均等化
+d4 <- stratified(d3, "class", 0.5)
+d4
+
+# 分割後のドキュメント番号を数値に変換
+d5 <- d4$id_numeric %>% as.numeric()
+d5
+
+```
+
+```{r}
+#==========
+#トレーニングセットの作成
+#========== 
+dfmat_training <- dfm_subset(v00, id_numeric %in% d5)
+#==========
+#テストセットの作成
+#========== 
+dfmat_test <- dfm_subset(v00, !id_numeric %in% d5)
+
+#==========
+#分類器（Naive Bayes、SVM、線形SVM）の作成
+#========== 
+my_nb_classifier <- textmodel_nb(dfmat_training, docvars(dfmat_training, "class"))
+
+my_svm_classifier <- textmodel_svm(dfmat_training, probability = TRUE, docvars(dfmat_training, "class"))
+
+#==========
+#予測
+#==========
+predicted_nb <- predict(my_nb_classifier, newdata = dfmat_test)
+predicted_svm <- predict(my_svm_classifier, newdata = dfmat_test)
+
+#==========
+#実際のクラス
+#========== 
+actual <- docvars(dfmat_test, "class")
+
+#==========
+# 予測結果
+#========== 
+ctab_nb <- table(predicted_nb, actual)
+confusionMatrix(ctab_nb, positive = "1")
+
+ctab_svm <- table(predicted_svm, actual)
+confusionMatrix(ctab_svm, positive = "1")
+
+#==========
+# 誤差指標の計算
+#========== 
+error_metric <- function(CM) {
+  TN <- CM[1, 1]
+  TP <- CM[2, 2]
+  FP <- CM[1, 2]
+  FN <- CM[2, 1]
+  prec <- (TP) / (TP + FP)
+  accu <- (TP + TN) / (TP + TN + FP + FN)
+  recall <- (TP) / (TP + FN)
+  print(paste("モデルの精度：", round(prec, 3)))
+  print(paste("モデルの正解率：", round(accu, 3)))
+  print(paste("モデルの再現率：", round(recall, 3)))
+}
+
+# Naive Bayesの誤差指標
+error_metric(ctab_nb)
+
+# SVMの誤差指標
+error_metric(ctab_svm)
+
+```
+

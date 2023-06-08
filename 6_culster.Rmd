@@ -1,0 +1,140 @@
+---
+title: "Untitled"
+author: "oushiei"
+date: "2023-02-01"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+suppressPackageStartupMessages({
+  library(quanteda)
+  library(quanteda.textstats)
+  library(readtext)
+  library(tidyverse)
+  library(tidytext)
+  library(showtext)
+  library(dendextend)
+})
+setwd("/Users/oushiei/Desktop/论文终稿/R_based_translation_study")
+source("font and theme.R")
+```
+
+
+```{r}
+#==========
+# データを読み込む
+#==========
+corpus_six_three <- readtext("data/3_6_seg",docvarsfrom = "filenames") %>% corpus()
+corpus_six_three %>% quanteda::docvars()
+token_faster <- tokenize_fasterword(corpus_six_three)
+token_select <- token_faster %>% 
+  tokens(remove_punct = TRUE, remove_numbers = TRUE) 
+#==========
+#　docnameを変える
+#==========
+quanteda::docnames(token_select) <- quanteda::docnames(corpus_six_three)
+quanteda::docvars(token_select,"author") <- quanteda::docvars(corpus_six_three,"docvar1")
+quanteda::docnames(token_select) <- quanteda::docvars(token_select,"author")
+#==========
+# かくにんする
+#==========
+quanteda::docnames(token_select)
+quanteda::docvars(token_select)
+```
+
+
+```{r}
+#==========
+# token
+#==========
+n_gram_token <- token_faster %>% tokens()
+
+quanteda::docnames(n_gram_token) <- quanteda::docnames(corpus_six_three)
+quanteda::docvars(n_gram_token,"docvar1") <- quanteda::docvars(corpus_six_three,"docvar1")
+quanteda::docnames(n_gram_token) <- quanteda::docvars(n_gram_token,"docvar1")
+```
+# すべての語からn-gramを抽出
+```{r}
+#==========
+# 2-gram 
+#==========
+token_2ngram <- n_gram_token%>% tokens_ngrams(n=2)
+```
+
+# 文末、文頭表現(based on the 2gram)
+```{r}
+#==========
+# 文末、文頭表現(based on the 2gram)
+#==========
+tou_pattern_2 = c("，_*","。_*")
+mo_pattern_2=c("*_，","*_。")
+all_pattern_2=c("，_*","。_*","*_，","*_。")
+#==========
+# パターンの抽出
+#==========
+tou_pattern_2gram <- tokens_select(token_2ngram, pattern = tou_pattern_2) %>% dfm()
+mo_pattern_2gram<- tokens_select(token_2ngram, pattern = mo_pattern_2) %>% dfm()
+all_pattern_2gram<- tokens_select(token_2ngram, pattern = all_pattern_2) %>% dfm()
+```
+
+```{r}
+#==========
+# クラスタ
+#==========
+tou_pattern_2gram
+mo_pattern_2gram
+all_pattern_2gram
+#==========
+#　2つの樹形図を同じ図にプロットする
+#==========
+par(mfrow=c(1,2),mar = c(1, 1, 1, 7))
+dfm_my=dfm_trim(tou_pattern_2gram, min_termfreq = 20)
+dist_tmp = dfm_weight(dfm_my, scheme = "prop") %>% convert(to="data.frame")
+dist_tmp
+rownames(dist_tmp) <- dist_tmp$doc_id
+dist_tmp$doc_id <- NULL
+dist_tmp
+tree <- dist_tmp%>% 
+  dist() %>% 
+  hclust()
+dend <- tree %>% 
+  as.dendrogram()
+#==========
+#
+#==========
+dend %>% 
+  set('branches_k_color', k=8) %>% 
+  plot(horiz = T)
+title("句点＋単語、コンマ＋単語")
+#==========
+#　ここからdfm_trimをmo_pattern_2gramにかえてまた生成する
+#==========
+dend %>% 
+  set('branches_k_color', k=6) %>% 
+  plot(horiz = T)
+title("単語＋句点、単語＋コンマ")
+#==========
+# ここからdfm_trimをall_pattern_2gramにかえてまた生成する
+#==========
+par(mfrow=c(1,1),mar = c(8, 5, 3, 2))
+dend %>% 
+  set('branches_k_color', k=6) %>% 
+  plot(horiz = F)
+title("頻度20以上の文頭、文末表現2-gram")
+```
+
+
+```{r}
+#==========
+# 出現頻度を統計する
+#==========
+tstat_freq <- textstat_frequency(tou_pattern_2gram, n = 1, groups = docvar1)
+
+tstat_freq <- textstat_frequency(mo_pattern_2gram, n = 1, groups = docvar1)
+
+tstat_freq <- textstat_frequency(all_pattern_2gram, n = 1, groups = docvar1)
+```

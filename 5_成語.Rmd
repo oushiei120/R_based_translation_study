@@ -1,0 +1,88 @@
+---
+title: "Untitled"
+author: "oushiei"
+date: "2023-01-31"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# パッケージとデータを読み込む
+
+```{r}
+suppressPackageStartupMessages({
+  require(quanteda)
+  library(tidytext)
+  library(devtools)
+  library(jiebaR)
+  library(readtext)
+  library(tidyverse)
+  library(tidyr)
+  library(quanteda.textstats)
+  library(showtext)
+})
+setwd("/Users/oushiei/Desktop/论文终稿/R_based_translation_study")
+source("font and theme.R")
+```
+
+```{r}
+my_worker <- worker(bylines=T,symbol = T, user="data/dictionary/【源文件】成语俗语.dict")
+
+corpus_noseg <- readtext("data/nothing",docvarsfrom = "filenames") %>%corpus() 
+
+quanteda::docnames(corpus_noseg) <- quanteda::docvars(corpus_noseg,"docvar1")
+corpus_noseg
+```
+
+```{r}
+text_corpus_tidy <-corpus_noseg %>%
+  tidy %>% 
+  mutate(textID = row_number())
+text_corpus_tidy 
+#==========
+# 分かち書き
+#==========
+text_tokens <- text_corpus_tidy$text %>%
+  segment(jiebar = my_worker) %>%
+  as.tokens() 
+quanteda::docnames(text_tokens) <-quanteda:: docnames(corpus_noseg)
+#==========
+# クリーニング
+#==========
+token4 <- text_tokens %>%tokens(remove_punct = TRUE, remove_numbers = TRUE) %>% 
+  tokens_remove(pattern = stopwords("zh_cn", source = "marimo"),padding=F)%>% 
+  tokens_select(min_nchar = 4,max_nchar =4)
+#==========
+# read idioms as a list 
+#========== 
+idioms<- read_csv("data/dictionary/成语.csv",col_names ="list") %>% as.tibble()
+idioms_list <- idioms$list%>% as.character()
+idioms_list %>% summary()
+#==========
+# 抽出する
+#==========
+idioms_clean <- tokens_select(token4,pattern = idioms_list, selection = "keep")
+idioms_clean %>% head
+r1 <- ntoken(idioms_clean) %>%tibble() %>% rename("count"=".") 
+r1$name <-  quanteda::docnames(text_tokens) 
+r1$count %>% mean
+```
+
+# 图4-8
+```{r}
+
+values=c("#DE3533", "#0047AB", "#006644",
+                               "#10C25B", "#808080","#FF8000")
+ggplot(r1)+
+  geom_bar(aes(name,count,fill=name),stat = "identity")+
+  geom_text(aes(name,count,label=count),size=7)+
+  scale_fill_manual(values = values)+
+  geom_hline(yintercept=mean(r1$count), color="black",linewidth = 1.5)+
+  annotate("text", x=2, y=332, label="321.5", size=8, color="blue")+
+  theme_ou()+
+  labs(x="翻訳者",y="４字成語の使用頻度")+
+  theme(legend.position="none")
+```
+

@@ -1,0 +1,141 @@
+---
+title: "Untitled"
+author: "oushiei"
+date: "2023-05-30"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# 读取需要的包
+```{r}
+suppressPackageStartupMessages({
+  library(quanteda)
+  library(quanteda.textstats)
+  library(jiebaR)
+  library(readtext)
+  library(purrr)
+  library(tidyverse)
+  library(tidytext)
+  library(patchwork)})
+setwd("/Users/oushiei/Desktop/论文终稿/R_based_translation_study")
+source("font and theme.R")
+```
+
+```{r}
+#==========
+#  segment 中科院NLPLR形態素解析器による分ち書き済みのテキストデータ
+#==========
+corpus_six <- readtext("data/segment",docvarsfrom = "filenames") 
+#==========
+# 分ち書きしたテキストをquantedaのtokenに
+#==========
+token_faster <-corpus_six %>% corpus() %>%  tokenize_fasterword() %>%quanteda::tokens()
+quanteda::docnames(token_faster) <- quanteda::docnames(corpus_six)
+#==========
+# 言葉の豊富さを測るため記号、数字を一括削る
+#========== 
+token_select <- token_faster %>% 
+  tokens(remove_punct = TRUE, remove_numbers = TRUE) 
+#==========
+# textstat_lexdiv関数により、言葉の豊富さを測る
+#==========
+houhusa <- textstat_lexdiv(token_select,measure = c("C","MSTTR","MATTR","R", MATTR_window = 100L,
+                                       MSTTR_segment = 100L))
+houhusa
+```
+# 图4-2
+```{r}
+#==========
+# 言葉の豊富さとのべ語数
+#==========
+library(psych)  
+ntoken <- ntoken(token_select) %>% tibble() %>% rename(tokens=".")
+houhusa_token <- cbind(houhusa,ntoken) %>% tibble() 
+houhusa_token
+pairs.panels(houhusa_token[,-1], cex.labels=2,pch=21, cex = 2, cex.axis = 2)
+```
+
+```{r}
+#==========
+# 可視化するためにデータを再構造する
+#==========
+houhusa
+houhusa_data <- houhusa %>% as.tibble %>% pivot_longer(2:4,names_to = "houhusa",values_to = "value")
+houhusa_data
+```
+# 图4-1
+```{r}
+library(ggh4x)
+library(lemon)
+library(RColorBrewer) 
+houhusa_data
+h1 <- houhusa %>% mutate(num=1:6)
+h1
+par(cex.axis=1.5,family = "SourceHanSerif")
+
+attach(h1)
+plot(num,C, type="b", xaxt = "n",
+     col="blue", ylab="y",
+     lty=1,
+     ylim=c(0.75,0.9),
+     lwd=3,cex=2,xlab="")
+# axis 
+axis(1, at=1:6, labels=h1$document)
+# add new line
+lines(num,MSTTR, col="red",
+      lty=2,lwd=3,cex=2,pch=2,type = "b")
+lines(num,MATTR, col="green",
+      lty=3,lwd=3,cex=2,pch=2,type = "b")
+# add new plot 
+par(new = TRUE)                           
+plot(num, R, pch = 1, 
+     axes = FALSE,type="b", col="black",
+     ylab = "",xlab = "",lwd=3,cex=2,lty=1)
+axis(side = 4, at = pretty(range(R))+1)      
+mtext("R", side = 4, line = 3)            
+
+legend(2,33.2,legend=c("C","MSTTR","MATTR","R"), col=c("blue","red","green","black"),
+      lty=c(1,2,3,1),pch=c(1,2,2,1),ncol=1,cex=1.2)
+
+#==========
+# 述べ語数と異なり語数
+#==========
+token <- ntoken(token_select) %>% tibble 
+colnames(token) <- "token"
+dput(token)
+type <- ntype(token_select) %>% tibble
+colnames(type) <- "type"
+token;type
+
+```
+# 图4-3
+```{r}
+tandttr <-houhusa %>% as_tibble()  %>% transform(token=token,type=type) %>% select(document,token,type)
+tandttr
+
+barplot(cbind(tandttr$token,tandttr$type)~ tandttr$document,
+        main = "語彙使用", 
+        xlab = "", 
+        beside=T,
+        col=c("yellow","lightblue"),
+        names.arg = tandttr$document, 
+        horiz = F,
+        legend.text = c("延べ語数", "異なり語数"))
+
+par(new = TRUE)                           
+plot(num, R, pch = 1,           
+     axes = FALSE,type="b", col="black",
+     ylab = "",xlab = "",lwd=3,cex=2,lty=1)
+
+axis(side = 4, at = pretty(range(R)))     
+mtext("R", side = 4, line = 3)          
+```
+
+
+
+
+
+

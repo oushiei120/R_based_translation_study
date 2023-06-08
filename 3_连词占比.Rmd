@@ -1,0 +1,140 @@
+---
+title: "Untitled"
+author: "oushiei"
+date: "2023-01-30"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# 連詞の割合
+```{r}
+suppressPackageStartupMessages({
+  library(gridExtra)
+  library(ggplot2)
+  library(showtext)
+  library(quanteda)
+  library(quanteda.textstats)
+  library(jiebaR)
+  library(readtext)
+  library(purrr)
+  library(tidyverse)
+  library(tidytext)
+  library(quanteda.textmodels)
+  library(quanteda.textplots)
+  library(fmsb)})
+setwd("/Users/oushiei/Desktop/论文终稿/R_based_translation_study")
+source("font and theme.R")
+```
+
+
+#　データを読み込む
+```{r}
+v0 <- readtext("data/segment",docvarsfrom = "filenames") %>% corpus() %>% tokens(what="fasterword")
+```
+
+# 連詞を設定する
+```{r}
+dict <- dictionary(list(并列 = c("和","跟","与","同","及","而","况","况且","何况","乃至"),
+                        承接 = c("则","乃","就","而","于是","至于","说到","此外","像","如","一般","比方"),
+                        转折 = c("却","但是","然而","而","偏偏","只是","不过","至于","致","不料","岂知"),
+                        因果 = c("原来","因为","由于","以便","因此","所以","是故","以致"),
+                        选择 = c("或","抑"),
+                        假设 = c("若","如果","若是","假如","假使","倘若","要是","譬如"),
+                        比较 = c("像","好比","如同","似乎","等于","不如","不及","与其","不如"),
+                        让步 = c("虽然","固然","尽管","纵然","即使")))
+renshi <- tokens_lookup(v0, dictionary = dict) %>% dfm() 
+quanteda::docnames(renshi) <- quanteda::docvars(renshi,"docvar1")
+renshi_data <- renshi %>% convert(to="data.frame")
+renshi_data # 表4-1
+```
+
+# 連詞の使用率
+```{r}
+df_scaled<-renshi_data %>% select(-doc_id) %>% apply(2, scales::rescale)
+df_scaled
+rownames(df_scaled) <- renshi_data$doc_id
+df_scaled
+```
+
+# レーダーチャートを生成する関数である
+```{r}
+create_beautiful_radarchart <- function(data, color = "#00AFBB", 
+                                        vlabels = colnames(data), vlcex = 0.7,
+                                        caxislabels = NULL, title = NULL, ...){
+  radarchart(
+    data, axistype = 1,
+    pcol = color, pfcol = scales::alpha(color, 0.5), plwd = 2, plty = 1,
+    cglcol = "grey", cglty = 1, cglwd = 0.8,
+    axislabcol = "grey", 
+    vlcex = vlcex, vlabels = vlabels,
+    caxislabels = caxislabels, title = title, 
+    family = "SourceHanSerif",
+    cex = 1.2
+  )
+}
+```
+
+```{r}
+op <- par(mar = c(1, 2, 2, 2))
+
+# レーダーチャートを設定する
+create_beautiful_radarchart(
+  data = df, caxislabels = c(0, 5, 10, 15, 20),
+  color = c("#00AFBB", "#E7B800", "#FC4E07")
+)
+# Add an horizontal legend
+legend(
+  x = "bottom", legend = rownames(df[-c(1,2),]), horiz = TRUE,
+  bty = "n", pch = 20 , col = c("#00AFBB", "#E7B800", "#FC4E07"),
+  text.col = "black", cex = 1, pt.cex = 1.5
+  )
+```
+
+
+```{r}
+col_max <- apply(df_scaled, 2, max)
+col_min <- apply(df_scaled, 2, min)
+col_mean <- apply(df_scaled, 2, mean)
+col_summary <- t(data.frame(Max = col_max, Min = col_min, Average = col_mean))##变成表格
+df_scaled2 <- as.data.frame(rbind(col_summary, df_scaled))
+head(df_scaled2)
+
+```
+
+# 图4-9 图4-10
+```{r}
+opar <- par() 
+
+op <- par(mar = c(1, 1, 1, 1)+0.2)
+par(oma = c(1, 2, 1, 1))
+par(mfrow = c(1,3))
+colors=c("#DE3533", "#0047AB", "#006644",
+                               "#10C25B", "#808080","#FF8000")
+ 
+for (i in 4:6) {
+  radarchart(
+    df_scaled2[c(1:3, i), ],
+    pfcol = c("#99999980",NA),
+    pcol= c(NA,colors[i-3]), plty = 1, plwd = 2,line=-5,
+    title = row.names(df_scaled2)[i],
+    vlcex=1.3,calcex=1.2,palcex=2,
+    family = "SourceHanSerif", cex.main = 2
+  )
+ }
+
+for (i in 7:9) {
+  radarchart(
+    df_scaled2[c(1:3, i), ],
+    pfcol = c("#99999980",NA),
+    pcol= c(NA,colors[i-3]), plty = 1, plwd = 2,line=-5,
+    title = row.names(df_scaled2)[i],
+    vlcex=1.3,calcex=1.2,palcex=2,
+    family = "SourceHanSerif", cex.main = 2
+  )
+ }
+
+```
+
